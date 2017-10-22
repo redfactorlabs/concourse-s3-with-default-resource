@@ -1,0 +1,103 @@
+---
+resource_types:
+- name: s3-with-default
+  type: docker-image
+  source:
+    repository: redfactorlabs/concourse-s3-with-default-resource
+
+resources:
+- name: sample-txt-file
+  type: s3-with-default
+  source:
+    access_key_id: {{aws_access_key_id}}
+    secret_access_key: {{aws_secret_access_key}}
+    bucket: {{bucket_name}}
+    region_name: {{bucket_region}}
+    endpoint: {{s3_endpoint}}
+    versioned_file: file.txt
+    smuggler_params:
+      default_content: |
+        Some default content in case the file is missing.
+        This will be generated in the first run.
+
+- name: sample-archive-file
+  type: s3-with-default
+  source:
+    access_key_id: {{aws_access_key_id}}
+    secret_access_key: {{aws_secret_access_key}}
+    bucket: {{bucket_name}}
+    region_name: {{bucket_region}}
+    endpoint: {{s3_endpoint}}
+    versioned_file: data.tgz
+    smuggler_params:
+      default_command: "touch empty && tar -czf ${versioned_file} empty"
+
+- name: sample-random-file
+  type: s3-with-default
+  source:
+    access_key_id: {{aws_access_key_id}}
+    secret_access_key: {{aws_secret_access_key}}
+    bucket: {{bucket_name}}
+    region_name: {{bucket_region}}
+    endpoint: {{s3_endpoint}}
+    versioned_file: otherfile
+
+# A sample pipeline
+jobs:
+- name: default_text_job
+  plan:
+  - get: sample-txt-file
+  - task: test-task
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: alpine
+      inputs:
+      - name: sample-txt-file
+      outputs:
+      - name: my-new-file
+      run:
+        path: sh
+        args:
+        - -e
+        - -c
+        - |
+          cat sample-txt-file/file.txt
+          date > my-new-file/file.txt
+  - put: sample-txt-file
+    params:
+      file: my-new-file/file.txt
+
+- name: default_tgz_job
+  plan:
+  - get: sample-archive-file
+  - task: test-task
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: alpine
+      inputs:
+      - name: sample-archive-file
+      outputs:
+      - name: new-archive-file
+      run:
+        path: sh
+        args:
+        - -e
+        - -c
+        - |
+          tar -xvzf sample-archive-file/data.tgz
+          touch $(date +%Y%m%d-%H%M%S).txt
+          tar -cvzf new-archive-file/data.tgz *.txt
+  - put: sample-archive-file
+    params:
+      file: new-archive-file/data.tgz
+
+- name: always_waiting_job
+  plan:
+  - get: sample-random-file
+

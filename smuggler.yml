@@ -1,0 +1,24 @@
+---
+commands:
+  check: |
+    /opt/resource/wrapped/check > response.json
+    # See https://stackoverflow.com/a/13864829/395686
+    if [ -n "${SMUGGLER_default_content+x}" -o "${SMUGGLER_default_command+x}" ]; then
+      jq 'if . == [] then [{ "version_id":"-"}] else . end' < response.json
+    fi
+
+  in: |
+    if [ "${SMUGGLER_VERSION_version_id}" == "-" ]; then
+      # First run, generate the default content in configured
+      if [ -n "${SMUGGLER_default_content+x}" ]; then
+        echo "${SMUGGLER_default_content}" > ${SMUGGLER_DESTINATION_DIR}/${SMUGGLER_versioned_file}
+      elif [ -n "${SMUGGLER_default_command+x}" ]; then
+        versioned_file=${SMUGGLER_DESTINATION_DIR}/${SMUGGLER_versioned_file}
+        eval "${SMUGGLER_default_command}"
+      fi
+    else
+      # First run, simply print the default content
+      /opt/resource/wrapped/in ${SMUGGLER_DESTINATION_DIR}
+    fi
+
+  out: /opt/resource/wrapped/out ${SMUGGLER_SOURCES_DIR}
